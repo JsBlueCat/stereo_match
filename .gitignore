@@ -44,5 +44,9 @@ cmake_install.cmake
 install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
+
+# 忽略不需要的配置文件
 .vs
+.vscode
+dist
 build
