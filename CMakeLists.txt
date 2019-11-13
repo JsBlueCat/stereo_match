@@ -5,7 +5,7 @@ cmake_minimum_required (VERSION 3.0.0)
 
 project ("fine_tuning_railway")
 # 添加c++11的支持
-# add_compile_options(-std=c++11)
+set(CMAKE_CXX_FLAGS "-std=c++11")
 # 添加编译模式
 # set(CMAKE_BUILD_TYPE Release)#compile mode
 

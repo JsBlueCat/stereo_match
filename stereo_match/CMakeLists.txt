@@ -7,3 +7,5 @@ cmake_minimum_required (VERSION 3.0.0)
 add_executable (stereo_match "stereo_match.cpp" "stereo_match.h")
 
 # TODO: 如有需要，请添加测试并安装目标。
+# 链接OpenCV库文件
+target_link_libraries(stereo_match ${OpenCV_LIBS})
