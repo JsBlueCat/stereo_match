@@ -3,7 +3,8 @@
 
 #include "stereo_match.h"
 
-void find_cp3_point(Mat img, vector<Vec3f> &known_l_point, vector<Vec3f> &known_r_point, vector<Vec3f> &target_point);
+void find_cp3_point(Mat img, vector<Vec3f> &known_l_point, vector<Vec3f> &known_r_point, Point2f &target_point);
+void match_cp3(Point2f target_l_points, Point2f target_r_points, Mat Q, Mat &result);
 bool compute_function(Vec3f A, Vec3f B) {
 	if ((cvRound(A[0]) / 10) < (cvRound(B[0]) / 10)) {
 		return true;
@@ -29,7 +30,6 @@ int main(int argc, char** argv)
 		"{@arg1||}{@arg2||}{i||}{e||}");
 	img1_filename = samples::findFile(parser.get<std::string>(0));
 	img2_filename = samples::findFile(parser.get<std::string>(1));
-
 	if (parser.has("i"))
 		intrinsic_filename = parser.get<std::string>("i");
 	if (parser.has("e"))
@@ -108,13 +108,14 @@ int main(int argc, char** argv)
 		img1 = img1r;
 		img2 = img2r;
 
-		vector<Vec3f> known_l_points_l, known_l_points_r, target_l_points, known_r_points_l, known_r_points_r, target_r_points;
+		vector<Vec3f> known_l_points_l, known_l_points_r,known_r_points_l, known_r_points_r;
+		Point2f target_r_points, target_l_points;
 		// 左目拍摄 的 右图 
 		find_cp3_point(img1, known_r_points_l, known_r_points_r, target_r_points);
 		// 左目拍摄 的 左图
 		find_cp3_point(img2, known_l_points_l, known_l_points_r, target_l_points);
 		for (size_t i = 0; i < known_l_points_l.size(); i++) {
-			cout << "第 " << i + 1 << "对点" << endl;
+			//cout << "第 " << i + 1 << "对点" << endl;
 			Point2d A(cvRound(known_r_points_l[i][0]), cvRound(known_r_points_l[i][1])), B(cvRound(known_l_points_l[i][0]), cvRound(known_l_points_l[i][1]));
 			Point2d C(cvRound(known_r_points_r[i][0]), cvRound(known_r_points_r[i][1])), D(cvRound(known_l_points_r[i][0]), cvRound(known_l_points_r[i][1]));
 			double distance_l = _ABS(A.x - B.x);
@@ -131,8 +132,8 @@ int main(int argc, char** argv)
 			//cout << result << endl;
 			double f = M1.at<double>(0, 0);
 			double tx = _ABS(T.at<double>(0, 0));
-			result.at<double>(2, 0) = f * tx / distance_l;
-			cout << "左边的已知点" << i + 1 << "是:" << result << endl;
+			//result.at<double>(2, 0) = f * tx / distance_l;
+			//cout << "左边的已知点" << i + 1 << "是:" << result << endl;
 
 
 			double distance_r = _ABS(C.x - D.x);
@@ -145,43 +146,31 @@ int main(int argc, char** argv)
 			W = result.at<double>(3, 0);
 			result /= W;
 			//cout << result << endl;
-			result.at<double>(2, 0) = f * tx / distance_r;
-			cout << "右边的已知点" << i + 1 << "是:" << result << endl;
+			//result.at<double>(2, 0) = f * tx / distance_r;
+			//cout << "右边的已知点" << i + 1 << "是:" << result << endl;
 
 		}
 		// 计算 cp3
-		for (size_t i = 0; i < target_r_points.size(); i++) {
-			cout << "第 " << i + 1 << "对点" << endl;
-			Point2d A(cvRound(target_r_points[i][0]), cvRound(target_r_points[i][1])), B(cvRound(target_l_points[i][0]), cvRound(target_l_points[i][1]));
-			double distance_l = _ABS(A.x - B.x);
-			//cout << distance_l << endl;
-			Mat temp(4, 1, CV_64FC1);
-			temp.at<double>(0, 0) = A.x;
-			temp.at<double>(1, 0) = A.y;
-			temp.at<double>(2, 0) = distance_l;
-			temp.at<double>(3, 0) = 1.;
-			Mat result(4, 1, CV_64FC1);
-			result = (Q * temp);
-			double W = result.at<double>(3, 0);
-			result /= W;
-			//cout << result << endl;
-			double f = M1.at<double>(0, 0);
-			double tx = _ABS(T.at<double>(0, 0));
-			result.at<double>(2, 0) = f * tx / distance_l;
-			cout << "cp3点" << i + 1 << "是:" << result << endl;
-		}
+
+		Mat result(4, 1, CV_64FC1);
+		match_cp3(target_l_points, target_r_points, Q, result);
+		cout << result << endl;
+
+		ofstream outfile("out.txt",ios::app);
+		outfile << result.at<double>(0, 0) << " " << result.at<double>(1, 0) << " " << result.at<double>(2, 0) << endl;
 
 	}
 	return 0;
 }
 
 
-void find_cp3_point(Mat img, vector<Vec3f> &known_l_point, vector<Vec3f> &known_r_point, vector<Vec3f> &target_point) {
+void find_cp3_point(Mat img, vector<Vec3f> &known_l_point, vector<Vec3f> &known_r_point, Point2f &target_point) {
 	//Mat img_gauss;
 	//GaussianBlur(img, img_gauss, Size(9, 9), 2, 2);
 	vector<Vec3f> circles;
 	HoughCircles(img, circles, HOUGH_GRADIENT,
-		2, 20, 200, 50);
+		2, 40, 200, 80);
+	
 	for (size_t i = 0; i < circles.size(); i++)
 	{
 		Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
@@ -191,18 +180,65 @@ void find_cp3_point(Mat img, vector<Vec3f> &known_l_point, vector<Vec3f> &known_
 		// draw the circle outline
 		circle(img, center, radius, Scalar(255, 0, 255), 10, 8, 0);
 	}
+	//namedWindow("circles", 0);
+	//imshow("circles", img);
+	//waitKey(0);
+	vector<Vec3f> target_point_list;
 	sort(circles.begin(), circles.end(), compute_function);
 	known_l_point.assign(circles.begin(), circles.begin() + 4);
 	known_r_point.assign(circles.end() - 4, circles.end());
-	target_point.assign(circles.begin() + 4, circles.end() - 4);
-	//cout << known_l_point.size() << "," << known_r_point.size() << "," << target_point.size() << endl;
-	/*for (size_t i = 0; i < circles.size(); i++) {
-		Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
-		int radius = cvRound(circles[i][2]);
-		cout << center << "radius" << radius << endl;
+	target_point_list.assign(circles.begin() + 4, circles.end() - 4);
+
+
+	bool found;
+	vector<Point2f> corners;
+	SimpleBlobDetector::Params params;
+	params.filterByColor = true;
+	params.filterByArea = true;
+	params.minArea = 100;
+	params.maxArea = 2e5;
+	params.blobColor = 255;
+	Ptr<FeatureDetector> blobDetector = SimpleBlobDetector::create(params);
+	found = findCirclesGrid(img, Size(2,2), corners, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
+
+	assert(found);
+	if (false)
+	{
+		Mat cimg, cimg1;
+		cvtColor(img, cimg, COLOR_GRAY2BGR);
+		drawChessboardCorners(cimg, Size(2, 2), corners, found);
+		//drawChessboardCorners(cimg, boardSize, corners, found);
+		double sf = 640. / MAX(img.rows, img.cols);
+		resize(cimg, cimg1, Size(), sf, sf, INTER_LINEAR_EXACT);
+		imshow("corners", cimg1);
+		char c = (char)waitKey(500);
+		if (c == 27 || c == 'q' || c == 'Q') //Allow ESC to quit
+			exit(-1);
 	}
+	target_point = accumulate(corners.begin(), corners.end(), Point2f(0,0)) / (int)corners.size();
+	/*
+	// 圆孔目前4个点 
+	assert(target_point_list.size() == 4);
+	Point2f avg(0, 0);
+	for (size_t i = 0; i < target_point_list.size(); i++) {
+		Point2f center(target_point_list[i][0],target_point_list[i][1]);
+		avg += center;
+	}
+	target_point = avg / 4;
 	*/
-	namedWindow("circles", 0);
-	imshow("circles", img);
-	waitKey(0);
+	//namedWindow("circles", 0);
+	//imshow("circles", img);
+	//waitKey(0);
+}
+
+void match_cp3(Point2f target_l_points,Point2f target_r_points,Mat Q,Mat &result) {
+	double distance_l = _ABS(target_r_points.x - target_l_points.x);
+	Mat temp(4, 1, CV_64FC1);
+	temp.at<double>(0, 0) = target_r_points.x;
+	temp.at<double>(1, 0) = target_r_points.y;
+	temp.at<double>(2, 0) = distance_l;
+	temp.at<double>(3, 0) = 1.;
+	result = (Q * temp);
+	double W = result.at<double>(3, 0);
+	result /= W;
 }

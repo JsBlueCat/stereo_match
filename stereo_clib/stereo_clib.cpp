@@ -69,7 +69,7 @@ StereoCalib(const vector<string>& imagelist, Size boardSize, float squareSize, b
 					resize(img, timg, Size(), scale, scale, INTER_LINEAR_EXACT);
 				SimpleBlobDetector::Params params;
 				params.filterByColor = true;
-				params.filterByArea = false;
+				params.filterByArea = true;
 				params.minArea = 100;
 				params.maxArea = 2e5;
 				params.blobColor = 255;

@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
-
+#include <fstream>
 using namespace cv;
 using namespace std;
 // TODO: 在此处引用程序需要的其他标头。

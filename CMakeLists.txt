@@ -30,3 +30,4 @@ message("OpenCV_LIBS: ${OpenCV_LIBS}")
 # 包含子项目。
 add_subdirectory ("stereo_clib")
 add_subdirectory ("stereo_match")
+add_subdirectory ("hikivision_camera")
