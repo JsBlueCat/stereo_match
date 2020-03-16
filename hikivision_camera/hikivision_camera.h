@@ -18,11 +18,11 @@ using namespace std;
 
 class StereoCamera {
 public:
-	StereoCamera();// 初始化双相机
+	StereoCamera();// 构造函数
 	void OpenDoubleCamera();
 	void GrabImageDoubleCamera();
-	int PrintDeviceInfo(MV_CC_DEVICE_INFO* pstMVDevInfo);// 输出摄像机的状态
-	~StereoCamera();// 关闭相机 && 销毁句柄
+	int PrintDeviceInfo(MV_CC_DEVICE_INFO* pstMVDevInfo);// 打印设备信息
+	~StereoCamera();// 析构函数
 	cv::Mat left_img;
 	cv::Mat right_img;
 private:
@@ -30,7 +30,7 @@ private:
 	void* handle_left = NULL;
 	// 右相机句柄
 	void* handle_right = NULL;
-	// 所有相机的列表
+	// 相机列表
 	MV_CC_DEVICE_INFO_LIST stDeviceList;
 	map<int, int> camera_ip_map;
 	int left_idx;
