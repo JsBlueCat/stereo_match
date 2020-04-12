@@ -14,7 +14,12 @@ link_directories(${HIKI_LIB_DIR} ${CAMERA_CONTROL_LIB_DIR})
 
 # 将源代码添加到此项目的可执行文件。
 add_executable (stereo_grab "stereo_grab.cpp")
+add_executable (stereo_clib_grab "stereo_clib_grab.cpp")
+add_executable (stereo_clib_grab_xy "stereo_clib_grab_xy.cpp")
+
 # TODO: 如有需要，请添加测试并安装目标。
 
 # 链接OpenCV库文件
 target_link_libraries(stereo_grab ${OpenCV_LIBS} hikivision_camera.lib MvCameraControl.lib)
+target_link_libraries(stereo_clib_grab ${OpenCV_LIBS} hikivision_camera.lib MvCameraControl.lib)
+target_link_libraries(stereo_clib_grab_xy ${OpenCV_LIBS} hikivision_camera.lib MvCameraControl.lib)

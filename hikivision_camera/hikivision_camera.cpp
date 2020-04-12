@@ -46,7 +46,7 @@ void  StereoCamera::GrabImageDoubleCamera() {
 /**
 打开双目摄像机
 ***/
-void  StereoCamera::OpenDoubleCamera() {
+void  StereoCamera::OpenDoubleCamera(const unsigned int num) {
 	cout << "opening stereo camerea" << endl;
 	int nRet;
 	nRet = MV_CC_OpenDevice(this->handle_left);
@@ -106,6 +106,17 @@ void  StereoCamera::OpenDoubleCamera() {
 	if (MV_OK != nRet)
 	{
 		printf("Cam[%d]: MV_CC_SetTriggerMode fail! nRet [%x]\n", this->right_idx, nRet);
+	}
+
+	nRet = MV_CC_SetGainMode(this->handle_left, num);
+	if (MV_OK != nRet)
+	{
+		printf("左相机，设置增益失败");
+	}
+	nRet = MV_CC_SetGainMode(this->handle_right, num);
+	if (MV_OK != nRet)
+	{
+		printf("右相机，设置增益失败");
 	}
 
 	// Get payload size
@@ -224,9 +235,15 @@ StereoCamera::StereoCamera() {
 		//  找到左相机
 		this->left_idx = it->second;
 		nRet = MV_CC_CreateHandle(&this->handle_left, stDeviceList.pDeviceInfo[it->second]);
-		if (MV_OK != nRet)
+		int count = 0;
+		while (MV_OK != nRet)
 		{
 			cerr << "Create Handle fail! nRet [0x" << nRet << "]"<< endl;
+			nRet = MV_CC_CreateHandle(&this->handle_left, stDeviceList.pDeviceInfo[it->second]);
+			if (count++ > 100) {
+				cerr << "尝试连接100次失败,请检查网络连接设备" << endl;
+				exit(-1);
+			}
 		}
 	}
 	it = this->camera_ip_map.find(RIGHT_CAMERA_IP4);
@@ -234,9 +251,15 @@ StereoCamera::StereoCamera() {
 		//  找到右相机
 		this->right_idx = it->second;
 		nRet = MV_CC_CreateHandle(&this->handle_right, stDeviceList.pDeviceInfo[it->second]);
-		if (MV_OK != nRet)
+		int count = 0;
+		while (MV_OK != nRet)
 		{
 			cerr << "Create Handle fail! nRet [0x" << nRet << "]" << endl;
+			nRet = MV_CC_CreateHandle(&this->handle_right, stDeviceList.pDeviceInfo[it->second]);
+			if (count++ > 100) {
+				cerr << "尝试连接100次失败,请检查网络连接设备" << endl;
+				exit(-1);
+			}
 		}
 	}
 }
@@ -269,7 +292,7 @@ StereoCamera::~StereoCamera() {
 		cerr << "Close Left Device fail! nRet [0x" << nRet << "]" << endl;
 	}
 	//关闭右相机 
-	nRet = MV_CC_CloseDevice(this->handle_left);
+	nRet = MV_CC_CloseDevice(this->handle_right);
 	if (MV_OK != nRet)
 	{
 		cerr << "Close Right Device fail! nRet [0x" << nRet << "]" << endl;
@@ -282,7 +305,7 @@ StereoCamera::~StereoCamera() {
 		cerr << "Destroy Left Handle fail! nRet [0x" << nRet << "]" << endl;
 	}
 	// 销毁 右相机句柄
-	nRet = MV_CC_DestroyHandle(this->handle_left);
+	nRet = MV_CC_DestroyHandle(this->handle_right);
 	if (MV_OK != nRet)
 	{
 		cerr << "Destroy Right Handle fail! nRet [0x" << nRet << "]" << endl;

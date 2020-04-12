@@ -19,7 +19,7 @@ using namespace std;
 class StereoCamera {
 public:
 	StereoCamera();// 构造函数
-	void OpenDoubleCamera();
+	void OpenDoubleCamera(const unsigned int num);
 	void GrabImageDoubleCamera();
 	int PrintDeviceInfo(MV_CC_DEVICE_INFO* pstMVDevInfo);// 打印设备信息
 	~StereoCamera();// 析构函数
