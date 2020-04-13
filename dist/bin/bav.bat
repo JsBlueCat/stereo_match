@@ -1,0 +1,1 @@
+for /l %%i in (1,1,30) do (.\stereo_match.exe "images\\1600_left_(%%i).bmp" "images\\1600_right_(%%i).bmp" -i="intrinsics.yml" -e="extrinsics.yml")

@@ -17,6 +17,7 @@ Mat R(3, 3, CV_64FC1), T(3, 1, CV_64FC1), R1(3, 3, CV_64FC1), P1(3, 4, CV_64FC1)
 Mat Q(4, 4, CV_64FC1), affine_R, affine_T;
 vector<double> rectify_param(30);
 void match_cp3(vector<Point2f> &target_l_points, vector<Point2f> &target_r_points, Mat &Q, Mat &avg);
+void find_known_point(Mat& img, vector<Point2f> &target_point);
 int find_cp3_point(Mat& img, vector<Point2f> &target_point);
 void load_param();
 void rectify_point(Mat &point);
@@ -169,6 +170,58 @@ void match_cp3(vector<Point2f> &target_l_points, vector<Point2f> &target_r_point
 	}
 	avg /= target_l_points.size();
 }
+// 找到 已知靶的坐标 
+void find_known_point(Mat& img, vector<Point2f> &target_point) {
+	Rect left_known_target_roi = Rect(Point(0, 0), Point(300, 1000));
+	Rect right_known_target_roi = Rect(Point(2000, 2000), Point(2300, 3300));
+	Mat left_img = img(left_known_target_roi);
+	Mat right_img = img(right_known_target_roi);
+
+	bool left_found, right_found;
+	vector<Point2f> corners_left, corners_right;
+	SimpleBlobDetector::Params params;
+	params.filterByColor = true;
+	params.filterByArea = true;
+	params.minArea = 100;
+	params.maxArea = 2e5;
+	params.blobColor = 255;
+	Ptr<FeatureDetector> blobDetector = SimpleBlobDetector::create(params);
+	left_found = findCirclesGrid(left_img, Size(6, 1), corners_left, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
+	right_found = findCirclesGrid(right_img, Size(6, 1), corners_right, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
+
+	assert(corners_left.size() == corners_right.size());
+	target_point.clear();
+	for (int i = 0; i < corners_left.size(); i++) {
+		target_point.push_back(corners_left[i] + Point2f(0, 0));
+	}
+	for (int i = 0; i < corners_left.size(); i++) {
+		target_point.push_back(corners_right[i] + Point2f(2000, 2000));
+	}
+}
+
+// 立体匹配 已知靶坐标点 
+void match_known_point(vector<Point2f> &left_target, vector<Point2f> &right_target, Mat &Q, vector<Vec3f> &out) {
+	assert(left_target.size() == right_target.size());
+	out.clear();
+	for (int i = 0; i < left_target.size(); i++) {
+		// 求直线距离 
+		double distance_l = _ABS(right_target[i].x - left_target[i].x);
+		Mat temp(4, 1, CV_64FC1);
+		temp.at<double>(0, 0) = left_target[i].x;
+		temp.at<double>(1, 0) = left_target[i].y;
+		temp.at<double>(2, 0) = distance_l;
+		temp.at<double>(3, 0) = 1.;
+		Mat result = (Q * temp);
+		double W = result.at<double>(3, 0);
+		result /= W;
+		result.at<double>(3, 0) = distance_l;
+		double x = result.at<double>(0, 0), y = result.at<double>(1, 0), z = result.at<double>(2, 0);
+		Vec3f xyz(x, y, z);
+		cout << xyz << endl;
+		out.push_back(xyz);
+	}
+}
+
 
 void rectify_point(Mat &point) {
 	if (rectify_param.size() % 3 != 0 ) {

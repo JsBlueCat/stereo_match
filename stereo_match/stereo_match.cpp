@@ -203,70 +203,35 @@ void find_rectify_matrix(Mat& img_l, Mat& img_r, Mat&out, Mat&inliers, Mat &Q) {
 
 // 找到 已知靶的坐标 
 void find_known_point(Mat& img, vector<Point2f> &target_point) {
-	vector<Vec3f> circles;
-	// 寻找圆孔
-	HoughCircles(img, circles, HOUGH_GRADIENT,
-		2, 40, 200, 80);
-	target_point.clear();
-	for (size_t i = 0; i < circles.size(); i++)
-	{
-		Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
-		int radius = cvRound(circles[i][2]);
-		// draw the circle center
-		circle(img, center, 3, Scalar(0, 255, 255), 3, 8, 0);
-		//// draw the circle outline
-		circle(img, center, radius, Scalar(255, 0, 255), 10, 8, 0);
-	}
-	namedWindow("circles", 0);
-	imshow("circles", img);
-	waitKey(0);
-	vector<Vec3f> known_l_point, known_r_point;
-	sort(circles.begin(), circles.end(), compute_function);
-	known_l_point.assign(circles.begin(), circles.begin() + KNOWN_POINT_NUMBER);
-	sort(known_l_point.begin(), known_l_point.end(), compute_function_single);
-	known_r_point.assign(circles.end() - KNOWN_POINT_NUMBER, circles.end());
-	sort(known_r_point.begin(), known_r_point.end(), compute_function_single);
-	// 左右目得到的图片必须相同
-	assert(known_l_point.size() == known_r_point.size());
-	for (int i = 0; i < known_l_point.size() + known_r_point.size(); i++) {
-		if (i < known_l_point.size()) { // 一般已经处理完了  左图结束
-			Point2f tp(known_l_point[i][0], known_l_point[i][1]);
-			target_point.push_back(tp);
-		}
-		else {
-			Point2f tp(known_r_point[i - known_l_point.size()][0], known_r_point[i - known_l_point.size()][1]);
-			target_point.push_back(tp);
-		}
-	}
+	Rect left_known_target_roi = Rect(Point(0,0), Point(300,1000));
+	Rect right_known_target_roi = Rect(Point(2000,2000), Point(2300,3300));
+	Mat left_img = img(left_known_target_roi);
+	Mat right_img = img(right_known_target_roi);
 
+	bool left_found,right_found;
+	vector<Point2f> corners_left, corners_right;
+	SimpleBlobDetector::Params params;
+	params.filterByColor = true;
+	params.filterByArea = true;
+	params.minArea = 100;
+	params.maxArea = 2e5;
+	params.blobColor = 255;
+	Ptr<FeatureDetector> blobDetector = SimpleBlobDetector::create(params);
+	left_found = findCirclesGrid(left_img, Size(6, 1), corners_left, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
+	right_found = findCirclesGrid(right_img, Size(6, 1), corners_right, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
+	
+	assert(corners_left.size() == corners_right.size());
+	target_point.clear();
+	for (int i = 0; i < corners_left.size(); i++) {
+		target_point.push_back(corners_left[i] + Point2f(0,0));
+	}
+	for (int i = 0; i < corners_left.size(); i++) {
+		target_point.push_back(corners_right[i] + Point2f(2000, 2000));
+	}
 }
 
 // 找到cp3点的目标靶坐标
 void find_cp3_point(Mat& img, vector<Point2f> &target_point) {
-	//Mat img_gauss;
-	//GaussianBlur(img, img_gauss, Size(9, 9), 2, 2);
-	vector<Vec3f> circles;
-	//HoughCircles(img, circles, HOUGH_GRADIENT,
-	//	2, 40, 200, 80);
-	//
-	//for (size_t i = 0; i < circles.size(); i++)
-	//{
-	//	Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
-	//	int radius = cvRound(circles[i][2]);
-	//	// draw the circle center
-	//	//circle(img, center, 3, Scalar(0, 255, 255), 3, 8, 0);
-	//	//// draw the circle outline
-	//	//circle(img, center, radius, Scalar(255, 0, 255), 10, 8, 0);
-	//}
-	//namedWindow("circles", 0);
-	//imshow("circles", img);
-	//waitKey(0);
-	//vector<Vec3f> target_point_list;
-	//sort(circles.begin(), circles.end(), compute_function);
-	//known_l_point.assign(circles.begin(), circles.begin() + 4);
-	//known_r_point.assign(circles.end() - 4, circles.end());
-	//target_point_list.assign(circles.begin() + 4, circles.end() - 4);
-
 
 	bool found;
 	vector<Point2f> corners;

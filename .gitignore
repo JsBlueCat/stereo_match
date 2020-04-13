@@ -30,7 +30,8 @@
 *.exe
 *.out
 *.app
-
+*.ilk
+*.pdb
 
 
 # cmake 
@@ -48,5 +49,7 @@ CTestTestfile.cmake
 # 忽略不需要的配置文件
 .vs
 .vscode
-dist
+
 build
+CodeAnalysis
+images
