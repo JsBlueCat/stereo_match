@@ -23,3 +23,11 @@ add_executable (stereo_clib_grab_xy "stereo_clib_grab_xy.cpp")
 target_link_libraries(stereo_grab ${OpenCV_LIBS} hikivision_camera.lib MvCameraControl.lib)
 target_link_libraries(stereo_clib_grab ${OpenCV_LIBS} hikivision_camera.lib MvCameraControl.lib)
 target_link_libraries(stereo_clib_grab_xy ${OpenCV_LIBS} hikivision_camera.lib MvCameraControl.lib)
+
+
+
+SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
+add_library(stereo_camera_lib SHARED stereo_lib.h stereo_lib.cpp)
+target_link_libraries (stereo_camera_lib ${OpenCV_LIBS} hikivision_camera.lib MvCameraControl.lib)
+INSTALL(TARGETS stereo_camera_lib RUNTIME DESTINATION F://luo_cmake)  
+SET_TARGET_PROPERTIES(stereo_camera_lib PROPERTIES LINKER_LANGUAGE C)

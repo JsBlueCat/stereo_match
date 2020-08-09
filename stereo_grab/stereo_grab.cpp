@@ -21,15 +21,109 @@ void find_known_point(Mat& img, vector<Point2f> &target_point);
 int find_cp3_point(Mat& img, vector<Point2f> &target_point);
 void load_param();
 void rectify_point(Mat &point);
+void match_known_point(vector<Point2f> &left_target, vector<Point2f> &right_target, Mat &Q, vector<Vec3f> &out);
+void match_two_known_point(vector<Point2f> &l_l_known_point,vector<Point2f>&l_r_known_point,vector<Point2f> &r_l_known_point,vector<Point2f> &r_r_known_point
+, Mat &Q, vector<Vec3f> &out);
+double distance(Point2f &A, Point2f &B);
+
+void show_img(Mat &img) {
+	Mat cimg, cimg1;
+	double sf = 640. / MAX(img.rows, img.cols);
+	resize(img, cimg1, Size(), sf, sf, INTER_LINEAR_EXACT);
+	imshow("corners", cimg1);
+	char c = (char)waitKey(500);
+	if (c == 27 || c == 'q' || c == 'Q') //Allow ESC to quit
+		exit(-1);
+}
+
+void show_find_point(Mat &img, vector<Point2f> &corners) {
+	Mat cimg, cimg1;
+	cvtColor(img, cimg, COLOR_GRAY2BGR);
+	drawChessboardCorners(cimg, Size(8, 2), corners, true);
+	//drawChessboardCorners(cimg, boardSize, corners, found);
+	double sf = 640. / MAX(img.rows, img.cols);
+	resize(cimg, cimg1, Size(), sf, sf, INTER_LINEAR_EXACT);
+	imshow("corners", cimg1);
+	char c = (char)waitKey(500);
+	if (c == 27 || c == 'q' || c == 'Q') //Allow ESC to quit
+		exit(-1);
+	cornerSubPix(img, corners, Size(8, 2), Size(-1, -1), TermCriteria(CV_TERMCRIT_ITER + CV_TERMCRIT_EPS, 30, 0.01));
+}
+void find_point(Mat &img, vector<Point2f> &corners) {
+	bool found;
+	SimpleBlobDetector::Params params;
+	params.filterByColor = true;
+	params.filterByArea = true;
+	params.minArea = 50;
+	params.maxArea = 1e5;
+	params.blobColor = 255;
+
+	Ptr<FeatureDetector> blobDetector = SimpleBlobDetector::create(params);
+	found = findCirclesGrid(img, Size(8, 2), corners, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
+	show_find_point(img, corners);
+
+}
+
+void split_img(Mat &img, Rect left, Rect middle, Rect right, Mat &left_known, Mat &target, Mat &right_known) {
+	left_known = img(left);
+	target = img(middle);
+	right_known = img(right);
+
+}
+
+void fix_roi(vector<Point2f>& corners, Point2f &roi) {
+	for (int i = 0; i < corners.size(); i++) {
+		corners[i] += roi;
+	}
+	//std::cout << corners << std::endl;
+}
+typedef enum{
+	left,
+	right
+} cam_mode;
+
+int find_one_cam_target_point(Mat& img, vector<Point2f> &left_target_point, vector<Point2f> &right_target_point, vector<Point2f> &middle_known_point, cam_mode mod) {
+	left_target_point.clear();
+	right_target_point.clear();
+	middle_known_point.clear();
+	Rect left, middle, right;
+	Mat left_img, right_img, middle_img;
+	if (mod == cam_mode::left) {
+		left = Rect(Point(1871, 1451), Point(2321, 2627)), middle = Rect(Point(2321, 0), Point(4367, img.rows)), right = Rect(Point(4367, 1451), Point(4793, 2627));
+	}
+	else {
+		left = Rect(Point(383, 1373), Point(845, 2633)), middle = Rect(Point(845, 0), Point(2867, img.rows)), right = Rect(Point(2867, 1373), Point(3329, 2633));
+	}
+	split_img(img, left, middle, right, left_img, middle_img, right_img);
+	find_point(left_img, left_target_point);
+	find_point(right_img, right_target_point);
+	find_cp3_point(middle_img, middle_known_point);
+
+	if(mod == cam_mode::left) {
+		fix_roi(left_target_point, Point2f(1871, 1451));
+		fix_roi(middle_known_point, Point2f(2321, 0));
+		fix_roi(right_target_point, Point2f(4367, 1451));
+	}
+	else {
+		fix_roi(left_target_point, Point2f(383, 1373));
+		fix_roi(middle_known_point, Point2f(845, 0));
+		fix_roi(right_target_point, Point2f(2867, 1373));
+	}
+	return (left_target_point.size()>0) & (right_target_point.size()>0) & (middle_known_point.size()>0);
+}
 
 int main() {
 	StereoCamera Fine_Tune_Device;
 	Fine_Tune_Device.OpenDoubleCamera(MV_GAIN_MODE_OFF);
 	int b = 1;
+	bool flag = true;
 	cout << "1 继续, 0 退出" << endl;
 	while (cin >> b,b) {
 		Mat average = Mat::zeros(3, 1, CV_64FC1);
+		Mat average_origin = Mat::zeros(4, 1, CV_64FC1);
 		ofstream outfile("xiangxi.txt", ios::app);
+		ofstream origin("origin.txt", ios::app);
+		ofstream known("known.txt", ios::app);
 		int count = 0;
 		while(count< EPOCH_NUM){
 			Fine_Tune_Device.GrabImageDoubleCamera();
@@ -44,30 +138,41 @@ int main() {
 
 			remap(Fine_Tune_Device.left_img, img1r, map11, map12, INTER_LINEAR);
 			remap(Fine_Tune_Device.right_img, img2r, map21, map22, INTER_LINEAR);
+			imwrite("left.bmp", img1r);
+			imwrite("right.bmp", img2r);
+
 
 			vector<Point2f> target_r_points, target_l_points;
+			vector<Point2f> known_l_l_points, known_l_r_points, known_r_l_points, known_r_r_points;
 			// 右目拍摄 的 右图 
-			int ret1 = find_cp3_point(img1r, target_r_points);
+			int ret1 = find_one_cam_target_point(img1r,known_l_l_points,known_l_r_points,target_l_points,cam_mode::left);
 			// 左目拍摄 的 左图
-			int ret2 = find_cp3_point(img2r, target_l_points);
+			int ret2 = find_one_cam_target_point(img2r, known_r_l_points, known_r_r_points, target_r_points, cam_mode::right);
 			if (!(ret1&ret2)) {
-				cout << "没有得到完整的cp3点,请移动到合适位置 "<<endl;
+				cout << "没有得到完整的cp3点,或已知靶,请移动到合适位置 "<<endl;
 				continue;
 			}
 			count++;
 			Mat result(4, 1, CV_64FC1);
 			match_cp3(target_l_points, target_r_points, Q, result);
-			//std::cout << result << endl;
+			vector<Vec3f> known_points_xyz;
+			match_two_known_point(known_l_l_points, known_l_r_points, known_r_l_points, known_r_r_points, Q, known_points_xyz);
+			Mat known_points_mat = Mat(known_points_xyz);
+			if (flag) {
+				known << known_points_mat << endl;
+				flag = false;
+			}
+			//std::cout << known_points_mat << endl;
 			//保存测量前的坐标
-			//outfile << result.at<double>(0, 0) << " " << result.at<double>(1, 0) << " " << result.at<double>(2, 0) << endl;
 			//average += result;
+			average_origin += result;
 			Mat get_point = result.rowRange(0, 3);
 			//std::cout << get_point << endl;
 			Mat predict_point = (affine_R * get_point + affine_T);
 			//std::cout << predict_point << endl;
 
 			 /*添加 修正之后的参数*/
-			rectify_point(predict_point);
+			//rectify_point(predict_point);
 
 			cout << predict_point << endl;
 			average += predict_point;
@@ -77,7 +182,10 @@ int main() {
 		}
 		ofstream avgout("pingjun.txt", ios::app);
 		average /= 5;
+		average_origin /= 5;
 		avgout << average.at<double>(0, 0) << " " << average.at<double>(1, 0) << " " << average.at<double>(2, 0) << endl;
+
+		origin << average_origin.at<double>(0, 0) << " " << average_origin.at<double>(1, 0) << " " << average_origin.at<double>(2, 0) << endl;
 		cout << "1 继续, 0 退出" << endl;
 	}
 	return 0;
@@ -136,17 +244,34 @@ int  find_cp3_point(Mat& img, vector<Point2f> &target_point) {
 	SimpleBlobDetector::Params params;
 	params.filterByColor = true;
 	params.filterByArea = true;
-	params.minArea = 100;
-	params.maxArea = 2e5;
+	params.minArea = 10;
+	params.maxArea = 1e5;
 	params.blobColor = 255;
+
 	Ptr<FeatureDetector> blobDetector = SimpleBlobDetector::create(params);
 	found = findCirclesGrid(img, Size(2, 2), corners, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
 	target_point = corners;
+
+	
 	if (!found) {
 		//cout << "not find point" << endl;
 		return 0;
 	}
 	else {
+		if (true)
+		{
+			Mat cimg, cimg1;
+			cvtColor(img, cimg, COLOR_GRAY2BGR);
+			drawChessboardCorners(cimg, Size(2, 2), corners, found);
+			//drawChessboardCorners(cimg, boardSize, corners, found);
+			double sf = 640. / MAX(img.rows, img.cols);
+			resize(cimg, cimg1, Size(), sf, sf, INTER_LINEAR_EXACT);
+			imshow("target", cimg1);
+			char c = (char)waitKey(500);
+			if (c == 27 || c == 'q' || c == 'Q') //Allow ESC to quit
+				exit(-1);
+		}
+
 		return 1;
 	}
 }
@@ -155,11 +280,11 @@ void match_cp3(vector<Point2f> &target_l_points, vector<Point2f> &target_r_point
 	assert(target_l_points.size() == target_r_points.size());
 	avg = Mat::zeros(4, 1, CV_64FC1);
 	for (int i = 0; i < target_l_points.size(); i++) {
-		double distance_l = _ABS(target_r_points[i].x - target_l_points[i].x);
+		double distance_l = _ABS(target_r_points[i].x - target_l_points[i].x);//_ABS(target_r_points[i].x - target_l_points[i].x);
 		Mat temp(4, 1, CV_64FC1);
 		//cout << target_r_points[i].x << ","<< target_r_points[i].y << endl;
-		temp.at<double>(0, 0) = target_r_points[i].x;
-		temp.at<double>(1, 0) = target_r_points[i].y;
+		temp.at<double>(0, 0) = target_l_points[i].x ;
+		temp.at<double>(1, 0) = target_l_points[i].y;
 		temp.at<double>(2, 0) = distance_l;
 		temp.at<double>(3, 0) = 1.;
 		Mat result = (Q * temp);
@@ -169,43 +294,61 @@ void match_cp3(vector<Point2f> &target_l_points, vector<Point2f> &target_r_point
 		avg += result;
 	}
 	avg /= target_l_points.size();
+	cout << avg << endl;
 }
 // 找到 已知靶的坐标 
-void find_known_point(Mat& img, vector<Point2f> &target_point) {
-	Rect left_known_target_roi = Rect(Point(0, 0), Point(300, 1000));
-	Rect right_known_target_roi = Rect(Point(2000, 2000), Point(2300, 3300));
-	Mat left_img = img(left_known_target_roi);
-	Mat right_img = img(right_known_target_roi);
+//void find_known_point(Mat& img, vector<Point2f> &target_point) {
+//	Rect left_known_target_roi = Rect(Point(0, 0), Point(300, 1000));
+//	Rect right_known_target_roi = Rect(Point(2000, 2000), Point(2300, 3300));
+//	Mat left_img = img(left_known_target_roi);
+//	Mat right_img = img(right_known_target_roi);
+//
+//	bool left_found, right_found;
+//	vector<Point2f> corners_left, corners_right;
+//	SimpleBlobDetector::Params params;
+//	params.filterByColor = true;
+//	params.filterByArea = true;
+//	params.minArea = 100;
+//	params.maxArea = 2e5;
+//	params.blobColor = 255;
+//	Ptr<FeatureDetector> blobDetector = SimpleBlobDetector::create(params);
+//	left_found = findCirclesGrid(left_img, Size(8, 1), corners_left, cv::CALIB_CB_ASYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
+//	right_found = findCirclesGrid(right_img, Size(8, 1), corners_right, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
+//
+//	assert(corners_left.size() == corners_right.size());
+//	target_point.clear();
+//	for (int i = 0; i < corners_left.size(); i++) {
+//		target_point.push_back(corners_left[i] + Point2f(0, 0));
+//	}
+//	for (int i = 0; i < corners_left.size(); i++) {
+//		target_point.push_back(corners_right[i] + Point2f(2000, 2000));
+//	}
+//}
 
-	bool left_found, right_found;
-	vector<Point2f> corners_left, corners_right;
-	SimpleBlobDetector::Params params;
-	params.filterByColor = true;
-	params.filterByArea = true;
-	params.minArea = 100;
-	params.maxArea = 2e5;
-	params.blobColor = 255;
-	Ptr<FeatureDetector> blobDetector = SimpleBlobDetector::create(params);
-	left_found = findCirclesGrid(left_img, Size(6, 1), corners_left, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
-	right_found = findCirclesGrid(right_img, Size(6, 1), corners_right, cv::CALIB_CB_SYMMETRIC_GRID | cv::CALIB_CB_CLUSTERING, blobDetector);
+void match_two_known_point(vector<Point2f> &l_l_known_point, vector<Point2f>&l_r_known_point, vector<Point2f> &r_l_known_point, vector<Point2f> &r_r_known_point
+	, Mat &Q, vector<Vec3f> &out) {
+	vector<Vec3f> l_out, r_out;
+	match_known_point(l_l_known_point, r_l_known_point, Q, l_out);
+	match_known_point(l_r_known_point, r_r_known_point, Q, r_out);
+	for (int i = 0; i < r_out.size(); i++) {
+		out.push_back(r_out[i]);
+	}
+	for (int i = 0; i < l_out.size(); i++) {
+		out.push_back(l_out[i]);
+	}
 
-	assert(corners_left.size() == corners_right.size());
-	target_point.clear();
-	for (int i = 0; i < corners_left.size(); i++) {
-		target_point.push_back(corners_left[i] + Point2f(0, 0));
-	}
-	for (int i = 0; i < corners_left.size(); i++) {
-		target_point.push_back(corners_right[i] + Point2f(2000, 2000));
-	}
 }
 
+double distance(Point2f &A, Point2f &B) {
+	return sqrt((A.x - B.x)*(A.x - B.x) + (A.y - B.y)*(A.y - B.y));
+}
 // 立体匹配 已知靶坐标点 
 void match_known_point(vector<Point2f> &left_target, vector<Point2f> &right_target, Mat &Q, vector<Vec3f> &out) {
 	assert(left_target.size() == right_target.size());
 	out.clear();
 	for (int i = 0; i < left_target.size(); i++) {
 		// 求直线距离 
-		double distance_l = _ABS(right_target[i].x - left_target[i].x);
+		double distance_l = _ABS(right_target[i].x - left_target[i].x);  //distance(right_target[i], left_target[i]); 
 		Mat temp(4, 1, CV_64FC1);
 		temp.at<double>(0, 0) = left_target[i].x;
 		temp.at<double>(1, 0) = left_target[i].y;

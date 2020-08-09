@@ -130,7 +130,7 @@ StereoCalib(const vector<string> &imagelist, Size boardSize, float squareSize, b
 	{
 		for (j = 0; j < boardSize.height; j++)
 			for (k = 0; k < boardSize.width; k++)
-				objectPoints[i].push_back(Point3f(float((2 * k + j % 2) * squareSize), float(j * squareSize), 0));
+				objectPoints[i].push_back(Point3f(float(( 2 * k + j % 2) * squareSize), -1 *float(j * squareSize), 0));
 	}
 
 	cout << "Running stereo calibration ...\n";

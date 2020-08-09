@@ -357,7 +357,7 @@ int main(int argc, char **argv)
 		string name = std::to_string(count);
 		imwrite("images/"+ name + "_left.bmp", Fine_Tune_Device.left_img);
 		imwrite("images/" + name + "_right.bmp", Fine_Tune_Device.right_img);
-		cout << "当前已经" << count++ + 1 << "张" << endl;
+		cout << "当前已经" << ++count << "张" << endl;
 		if (image_list.size() > 60) { break; }
 		cout << "1 继续, 0 退出 , 最多30张" << endl;
 	}
